@@ -51,6 +51,22 @@ exports.getProjects = asyncHandler(async (req, res, next) => {
         projects,
     });
 });
+exports.getProjectById = asyncHandler(async (req, res, next) => {
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+        const error = new Error("Project not found");
+        error.statusCode = StatusCodes.NOT_FOUND;
+        return next(error);
+    }
+
+    res.status(StatusCodes.OK).json({
+        success: true,
+        message: "Project retrieved successfully",
+        project,
+    });
+});
+
 exports.updateProjects = asyncHandler(async (req, res) => {
     const project = await Project.findById(req.params.id);
     if (!project) {
