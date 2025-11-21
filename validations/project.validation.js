@@ -2,6 +2,7 @@ const { z } = require("zod");
 
 const projectValidationSchema = z.object({
   title: z.string().min(1, "Title is required"),
+  academicYear: z.string().min(1, "Year is required"),
   name: z.string().min(1, "Name is required"),
   studentId: z.string().min(7, "Student Id needs to be of minimum 7 digits"),
   caseStudyBy: z.string().optional(),

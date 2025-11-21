@@ -5,12 +5,12 @@ const {
   submitProject,
   getProjects,
   getProjectById,
-  updateProjects,
+  updateProject,
   deleteProject,
 } = require("../controllers/project.controller");
 router.post("/create", upload.array("images", 5), submitProject);
 router.get("/getProjects", getProjects);
 router.get("/:id", getProjectById);
-router.patch("/updateProject/:id", upload.array("images", 5), updateProjects);
+router.patch("/updateProject/:id", upload.array("images", 5), updateProject);
 router.delete("/deleteProject/:id", deleteProject);
 module.exports = router;

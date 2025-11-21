@@ -16,10 +16,11 @@ const CourseTimelineSchema = new mongoose.Schema({
           semesterNumber: { type: Number, required: true },
           modules: [
             {
+              _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
               code: { type: String, required: true },
               name: { type: String, required: true },
               credits: { type: Number, required: true },
-              topicCoverage: { type: [String], required: true }, //in points
+              topicCoverage: { type: [String], required: true },
               remarks: { type: [String] },
             },
           ],
