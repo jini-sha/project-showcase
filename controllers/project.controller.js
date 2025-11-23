@@ -1,65 +1,53 @@
 const { StatusCodes } = require("http-status-codes");
 const asyncHandler = require("../middleware/asyncHandler.middleware");
 const Project = require("../models/project.model");
-const CourseTimeline = require("../models/courseTimeline.model");
-const { findModule } = require("../utils/findModule");
+const { Course, Module } = require("../models/courseTimeline.model");
 const fs = require("fs");
 const { projectValidationSchema } = require("../validations/project.validation");
 const { parseBoolean } = require("../utils/parseBool");
+
 exports.submitProject = asyncHandler(async (req, res, next) => {
-  const { course, moduleCode } = req.body;
-  console.log("Request body:", req.body);
+  const { courseId, moduleId } = req.body;
 
-  const timeline = await CourseTimeline.findOne({ course });
-  console.log("Found timeline:", timeline);
+  const course = await Course.findById(courseId);
+  if (!course) return next(Object.assign(new Error("Course not found"), { statusCode: StatusCodes.NOT_FOUND }));
 
-  if (!timeline) return next(Object.assign(new Error("Course timeline not found"), { statusCode: StatusCodes.NOT_FOUND }));
-
-  const moduleInfo = findModule(timeline, moduleCode);
-  console.log("Found moduleInfo:", moduleInfo);
-
-  if (!moduleInfo) return next(Object.assign(new Error("Module not found inside this course timeline"), { statusCode: StatusCodes.BAD_REQUEST }));
+  const module = await Module.findById(moduleId);
+  if (!module || !module.course.equals(course._id))
+    return next(Object.assign(new Error("Module not found for this course"), { statusCode: StatusCodes.BAD_REQUEST }));
 
   const data = {
     ...req.body,
-    module: moduleInfo.module,
-    level: String(moduleInfo.level),
-    semester: String(moduleInfo.semester),
-    academicYear: String(moduleInfo.year),
+    courseId: course._id.toString(),
+    moduleId: module._id.toString(),
+    level: module.level,
+    semesterNumber: module.semesterNumber,
+    academicYear: module.academicYear,
     featured: parseBoolean(req.body.featured),
     viewCount: req.body.viewCount ? Number(req.body.viewCount) : 0,
     images: req.files ? req.files.map(f => f.path) : [],
   };
 
-  console.log("Data before validation:", data);
-
-  const validatedData = projectValidationSchema.safeParse(data);
-  console.log("Validation result:", validatedData);
-
-  if (!validatedData.success) {
-    console.log("Validation errors:", validatedData.error.errors);
+  const validated = projectValidationSchema.safeParse(data);
+  if (!validated.success) {
     if (req.files) req.files.forEach(f => fs.unlink(f.path, () => {}));
     const error = new Error("Validation failed");
     error.statusCode = StatusCodes.BAD_REQUEST;
-    error.details = validatedData.error.errors;
+    error.details = validated.error.errors;
     return next(error);
   }
 
-  const newProject = await Project.create(validatedData.data);
-  console.log("Project created:", newProject);
-
+  const newProject = await Project.create(validated.data);
   res.status(StatusCodes.CREATED).json({ success: true, message: "Project uploaded successfully", project: newProject });
 });
 
-
 exports.getProjects = asyncHandler(async (req, res) => {
-  const { level, semester, year, course, featured, sort } = req.query;
+  const { level, semesterNumber, courseId, featured, sort } = req.query;
 
   const filter = {};
   if (level) filter.level = level;
-  if (semester) filter.semester = semester;
-  if (year) filter.year = year;
-  if (course) filter.course = course;
+  if (semesterNumber) filter.semesterNumber = semesterNumber;
+  if (courseId) filter.courseId = courseId;
   if (featured) filter.featured = parseBoolean(featured);
 
   let sortOption = { createdAt: -1 };
@@ -68,101 +56,46 @@ exports.getProjects = asyncHandler(async (req, res) => {
   if (sort === "reverse-alpha") sortOption = { title: -1 };
   if (sort === "popular") sortOption = { viewCount: -1 };
 
-  const projects = await Project.find(filter).sort(sortOption);
+  const projects = await Project.find(filter)
+    .sort(sortOption)
+    .populate("courseId")
+    .populate("moduleId");
 
-  const courses = [...new Set(projects.map(p => p.course))];
-  const timelines = await CourseTimeline.find({ course: { $in: courses } });
-  const timelineMap = {};
-  timelines.forEach(tl => { timelineMap[tl.course] = tl; });
-
-  const projectsWithModuleInfo = projects.map(proj => {
-    let moduleData = {};
-    const timeline = timelineMap[proj.course];
-    if (timeline && proj.moduleCode) {
-      const moduleInfo = findModule(timeline, proj.moduleCode);
-      if (moduleInfo) {
-        moduleData = {
-          moduleName: moduleInfo.module,
-          level: moduleInfo.level,
-          semester: moduleInfo.semester,
-          academicYear: moduleInfo.year,
-          credits: moduleInfo.credits,
-        };
-      }
-    }
-    return { ...proj.toObject(), ...moduleData };
-  });
-
-  res.status(StatusCodes.OK).json({
-    success: true,
-    message: "Projects retrieved successfully",
-    count: projectsWithModuleInfo.length,
-    projects: projectsWithModuleInfo,
-  });
+  res.status(StatusCodes.OK).json({ success: true, message: "Projects retrieved successfully", count: projects.length, projects });
 });
 
 exports.getProjectById = asyncHandler(async (req, res, next) => {
-  const project = await Project.findById(req.params.id);
+  const project = await Project.findById(req.params.id).populate("courseId").populate("moduleId");
   if (!project) return next(Object.assign(new Error("Project not found"), { statusCode: StatusCodes.NOT_FOUND }));
-
-  const timeline = await CourseTimeline.findOne({ course: project.course });
-  let moduleInfo = null;
-  if (timeline && project.moduleCode) moduleInfo = findModule(timeline, project.moduleCode);
-
-  const projectWithModuleInfo = {
-    ...project.toObject(),
-    ...(moduleInfo ? {
-      moduleName: moduleInfo.module,
-      level: moduleInfo.level,
-      semester: moduleInfo.semester,
-      academicYear: moduleInfo.year,
-      credits: moduleInfo.credits
-    } : {}),
-  };
-
-  res.status(StatusCodes.OK).json({
-    success: true,
-    message: "Project retrieved successfully",
-    project: projectWithModuleInfo,
-  });
-});
-
-exports.getProjectById = asyncHandler(async (req, res, next) => {
-  const project = await Project.findById(req.params.id);
-  if (!project) return next(Object.assign(new Error("Project not found"), { statusCode: StatusCodes.NOT_FOUND }));
-
-  const timeline = await CourseTimeline.findOne({ course: project.course });
-  let moduleInfo = null;
-  if (timeline && project.moduleCode) moduleInfo = findModule(timeline, project.moduleCode);
-
-  const projectWithModuleInfo = {
-    ...project.toObject(),
-    ...(moduleInfo ? { moduleName: moduleInfo.module, level: moduleInfo.level, semester: moduleInfo.semester, year: moduleInfo.year, credits: moduleInfo.credits } : {}),
-  };
-
-  res.status(StatusCodes.OK).json({ success: true, message: "Project retrieved successfully", project: projectWithModuleInfo });
+  res.status(StatusCodes.OK).json({ success: true, message: "Project retrieved successfully", project });
 });
 
 exports.updateProject = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
-  const { course, moduleCode } = req.body;
+  const { courseId, moduleId } = req.body;
+
   const project = await Project.findById(id);
   if (!project) return next(Object.assign(new Error("Project not found"), { statusCode: StatusCodes.NOT_FOUND }));
 
-  const timeline = await CourseTimeline.findOne({ course });
-  if (!timeline) return next(Object.assign(new Error("Course timeline not found for the given course"), { statusCode: StatusCodes.NOT_FOUND }));
+  if (courseId) {
+    const course = await Course.findById(courseId);
+    if (!course) return next(Object.assign(new Error("Course not found"), { statusCode: StatusCodes.NOT_FOUND }));
+    project.courseId = course._id.toString();
+  }
 
-  const moduleInfo = findModule(timeline, moduleCode);
-  if (!moduleInfo) return next(Object.assign(new Error("Module not found inside this course timeline"), { statusCode: StatusCodes.BAD_REQUEST }));
+  if (moduleId) {
+    const module = await Module.findById(moduleId);
+    if (!module || !module.course.equals(project.courseId))
+      return next(Object.assign(new Error("Module not found for this course"), { statusCode: StatusCodes.BAD_REQUEST }));
+    project.moduleId = module._id.toString();
+    project.level = module.level;
+    project.semesterNumber = module.semesterNumber;
+    project.academicYear = module.academicYear;
+  }
 
-  const data = {
-    ...req.body,
-    moduleCode,
-    featured: parseBoolean(req.body.featured),
-    images: req.files ? req.files.map(f => f.path) : project.images,
-  };
-
-  const validated = projectValidationSchema.partial().safeParse(data);
+  if (req.files) project.images = req.files.map(f => f.path);
+  Object.assign(project, req.body);
+  const validated = projectValidationSchema.partial().safeParse(project.toObject());
   if (!validated.success) {
     if (req.files) req.files.forEach(f => fs.unlink(f.path, () => {}));
     const error = new Error("Validation failed");

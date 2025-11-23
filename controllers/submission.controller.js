@@ -1,14 +1,12 @@
 const asyncHandler = require("../middleware/asyncHandler.middleware");
 const Submission = require("../models/submission.model");
 const { StatusCodes } = require("http-status-codes");
-const {
-  submissionValidationSchema,
-} = require("../validations/submission.validation");
+const { submissionValidationSchema } = require("../validations/submission.validation");
 
 exports.submit = asyncHandler(async (req, res) => {
-  const validatedSubmission = submissionValidationSchema.parse(req.body);
+  const validated = submissionValidationSchema.parse(req.body);
 
-  const newSubmission = await Submission.create(validatedSubmission);
+  const newSubmission = await Submission.create(validated);
 
   res.status(StatusCodes.CREATED).json({
     success: true,
@@ -18,17 +16,18 @@ exports.submit = asyncHandler(async (req, res) => {
 });
 
 exports.getSubmissions = asyncHandler(async (req, res) => {
-  const { level, semester, sort = "desc" } = req.query;
+  const { courseId, moduleId, sort = "desc" } = req.query;
 
   const filter = {};
-  if (level) filter.level = level;
-  if (semester) filter.semester = semester;
+  if (courseId) filter.course = courseId;
+  if (moduleId) filter.module = moduleId;
 
   const sortOrder = sort.toLowerCase() === "asc" ? 1 : -1;
 
-  const submissions = await Submission.find(filter).sort({
-    createdAt: sortOrder,
-  });
+  const submissions = await Submission.find(filter)
+    .populate("course")
+    .populate("module")
+    .sort({ createdAt: sortOrder });
 
   res.status(StatusCodes.OK).json({
     success: true,
