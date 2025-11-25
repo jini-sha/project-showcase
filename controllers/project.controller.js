@@ -95,33 +95,41 @@ exports.getProjectById = asyncHandler(async (req, res, next) => {
     project,
   });
 });
-
 exports.updateProject = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
-  const { courseId, moduleId } = req.body;
 
   const project = await Project.findById(id);
   if (!project) return next(Object.assign(new Error("Project not found"), { statusCode: StatusCodes.NOT_FOUND }));
 
-  if (courseId) {
-    const course = await Course.findById(courseId);
+  if (req.body.courseId) {
+    const course = await Course.findById(req.body.courseId);
     if (!course) return next(Object.assign(new Error("Course not found"), { statusCode: StatusCodes.NOT_FOUND }));
     project.courseId = course._id;
   }
 
-  if (moduleId) {
-    const module = await Module.findById(moduleId);
+  if (req.body.moduleId) {
+    const module = await Module.findById(req.body.moduleId);
     if (!module || !module.course.equals(project.courseId))
       return next(Object.assign(new Error("Module not found for this course"), { statusCode: StatusCodes.BAD_REQUEST }));
     project.moduleId = module._id;
   }
+  
+  if (req.files && req.files.length) project.images = req.files.map(f => f.path);
 
-  if (req.files) project.images = req.files.map(f => f.path);
+  const projectData = {
+    ...project.toObject(),
+    ...req.body,
+    courseId: project.courseId.toString(),
+    moduleId: project.moduleId.toString(),
+    featured: parseBoolean(req.body.featured ?? project.featured),
+    viewCount: Number(req.body.viewCount ?? project.viewCount ?? 0),
+    images: project.images || [],
+  };
 
-  Object.assign(project, req.body);
-  const validated = projectValidationSchema.partial().safeParse(project.toObject());
+  const validated = projectValidationSchema.partial().safeParse(projectData);
   if (!validated.success) {
     if (req.files) req.files.forEach(f => fs.unlink(f.path, () => { }));
+    console.log(validated.error.errors);
     const error = new Error("Validation failed");
     error.statusCode = StatusCodes.BAD_REQUEST;
     error.details = validated.error.errors;
@@ -133,6 +141,7 @@ exports.updateProject = asyncHandler(async (req, res, next) => {
 
   res.status(StatusCodes.OK).json({ success: true, message: "Project updated successfully", project });
 });
+
 
 exports.deleteProject = asyncHandler(async (req, res, next) => {
   const project = await Project.findById(req.params.id);
