@@ -9,7 +9,17 @@ exports.createCourse = asyncHandler(async (req, res) => {
   res.status(StatusCodes.CREATED).json({ success: true, message: "Course created successfully", data: course });
 });
 exports.getCourses = asyncHandler(async (req, res) => {
-  const courses = await Course.find().populate("modules");
+  const { name, code, moduleTitle } = req.query;
+
+  let courseQuery = {};
+  if (name) courseQuery.name = name;
+  if (code) courseQuery.code = code;
+
+  const courses = await Course.find(courseQuery).populate({
+    path: "modules",
+    match: moduleTitle ? { title: { $regex: moduleTitle, $options: "i" } } : {},
+  });
+
   const coursesWithCount = await Promise.all(
     courses.map(async (course) => {
       const modulesWithCount = await Promise.all(
@@ -21,8 +31,14 @@ exports.getCourses = asyncHandler(async (req, res) => {
       return { ...course.toObject(), modules: modulesWithCount };
     })
   );
-  res.status(StatusCodes.OK).json({ success: true, message: "Courses fetched successfully", data: coursesWithCount });
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: "Courses fetched successfully",
+    data: coursesWithCount,
+  });
 });
+
 
 exports.updateCourse = asyncHandler(async (req, res) => {
   const { id } = req.params;

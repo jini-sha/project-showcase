@@ -1,7 +1,7 @@
 const { z } = require("zod");
 
 const courseSchema = z.object({
-  name: z.enum(["Cybersecurity", "Computer Science"], {
+  name: z.enum(["Cybersecurity", "Computer Science", "Business Management"], {
     errorMap: () => ({ message: "Course must be Cybersecurity or Computer Science" }),
   }),
   code: z.string().nonempty("Course code is required"),
