@@ -15,22 +15,19 @@ exports.submitProject = asyncHandler(async (req, res, next) => {
   const module = await Module.findById(moduleId);
   if (!module || !module.course.equals(course._id))
     return next(Object.assign(new Error("Module not found for this course"), { statusCode: StatusCodes.BAD_REQUEST }));
-
   const data = {
     ...req.body,
     courseId: course._id.toString(),
     moduleId: module._id.toString(),
-    level: module.level,
-    semesterNumber: module.semesterNumber,
-    academicYear: module.academicYear,
     featured: parseBoolean(req.body.featured),
     viewCount: req.body.viewCount ? Number(req.body.viewCount) : 0,
     images: req.files ? req.files.map(f => f.path) : [],
   };
 
+
   const validated = projectValidationSchema.safeParse(data);
   if (!validated.success) {
-    if (req.files) req.files.forEach(f => fs.unlink(f.path, () => {}));
+    if (req.files) req.files.forEach(f => fs.unlink(f.path, () => { }));
     const error = new Error("Validation failed");
     error.statusCode = StatusCodes.BAD_REQUEST;
     error.details = validated.error.errors;
@@ -44,30 +41,59 @@ exports.submitProject = asyncHandler(async (req, res, next) => {
 exports.getProjects = asyncHandler(async (req, res) => {
   const { level, semesterNumber, courseId, featured, sort } = req.query;
 
-  const filter = {};
-  if (level) filter.level = level;
-  if (semesterNumber) filter.semesterNumber = semesterNumber;
-  if (courseId) filter.courseId = courseId;
-  if (featured) filter.featured = parseBoolean(featured);
+  const projectMatch = {};
+  if (courseId) projectMatch.courseId = courseId;
+  if (featured !== undefined) projectMatch.featured = featured === "true";
+
+  const pipeline = [
+    { $match: projectMatch },
+    {
+      $lookup: {
+        from: "modules",
+        localField: "moduleId",
+        foreignField: "_id",
+        as: "module",
+      },
+    },
+    { $unwind: "$module" },
+  ];
+
+  const moduleMatch = {};
+  if (level) moduleMatch["module.level"] = Number(level);
+  if (semesterNumber) moduleMatch["module.semesterNumber"] = Number(semesterNumber);
+  if (Object.keys(moduleMatch).length > 0) pipeline.push({ $match: moduleMatch });
 
   let sortOption = { createdAt: -1 };
-  if (sort === "oldest") sortOption = { createdAt: 1 };
-  if (sort === "alphabetical") sortOption = { title: 1 };
-  if (sort === "reverse-alpha") sortOption = { title: -1 };
-  if (sort === "popular") sortOption = { viewCount: -1 };
+  switch (sort) {
+    case "oldest": sortOption = { createdAt: 1 }; break;
+    case "alphabetical": sortOption = { title: 1 }; break;
+    case "reverse-alpha": sortOption = { title: -1 }; break;
+    case "popular": sortOption = { viewCount: -1 }; break;
+  }
+  pipeline.push({ $sort: sortOption });
 
-  const projects = await Project.find(filter)
-    .sort(sortOption)
-    .populate("courseId")
-    .populate("moduleId");
+  const projects = await Project.aggregate(pipeline);
 
-  res.status(StatusCodes.OK).json({ success: true, message: "Projects retrieved successfully", count: projects.length, projects });
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: "Projects retrieved successfully",
+    count: projects.length,
+    projects,
+  });
 });
 
 exports.getProjectById = asyncHandler(async (req, res, next) => {
-  const project = await Project.findById(req.params.id).populate("courseId").populate("moduleId");
+  const project = await Project.findById(req.params.id)
+    .populate("courseId")
+    .populate("moduleId");
+
   if (!project) return next(Object.assign(new Error("Project not found"), { statusCode: StatusCodes.NOT_FOUND }));
-  res.status(StatusCodes.OK).json({ success: true, message: "Project retrieved successfully", project });
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: "Project retrieved successfully",
+    project,
+  });
 });
 
 exports.updateProject = asyncHandler(async (req, res, next) => {
@@ -80,24 +106,22 @@ exports.updateProject = asyncHandler(async (req, res, next) => {
   if (courseId) {
     const course = await Course.findById(courseId);
     if (!course) return next(Object.assign(new Error("Course not found"), { statusCode: StatusCodes.NOT_FOUND }));
-    project.courseId = course._id.toString();
+    project.courseId = course._id;
   }
 
   if (moduleId) {
     const module = await Module.findById(moduleId);
     if (!module || !module.course.equals(project.courseId))
       return next(Object.assign(new Error("Module not found for this course"), { statusCode: StatusCodes.BAD_REQUEST }));
-    project.moduleId = module._id.toString();
-    project.level = module.level;
-    project.semesterNumber = module.semesterNumber;
-    project.academicYear = module.academicYear;
+    project.moduleId = module._id;
   }
 
   if (req.files) project.images = req.files.map(f => f.path);
+
   Object.assign(project, req.body);
   const validated = projectValidationSchema.partial().safeParse(project.toObject());
   if (!validated.success) {
-    if (req.files) req.files.forEach(f => fs.unlink(f.path, () => {}));
+    if (req.files) req.files.forEach(f => fs.unlink(f.path, () => { }));
     const error = new Error("Validation failed");
     error.statusCode = StatusCodes.BAD_REQUEST;
     error.details = validated.error.errors;
@@ -106,6 +130,7 @@ exports.updateProject = asyncHandler(async (req, res, next) => {
 
   Object.assign(project, validated.data);
   await project.save();
+
   res.status(StatusCodes.OK).json({ success: true, message: "Project updated successfully", project });
 });
 
@@ -113,7 +138,8 @@ exports.deleteProject = asyncHandler(async (req, res, next) => {
   const project = await Project.findById(req.params.id);
   if (!project) return next(Object.assign(new Error("Project not found"), { statusCode: StatusCodes.NOT_FOUND }));
 
-  if (project.images && project.images.length) project.images.forEach(f => fs.unlink(f, () => {}));
+  if (project.images && project.images.length) project.images.forEach(f => fs.unlink(f, () => { }));
   await project.deleteOne();
+
   res.status(StatusCodes.OK).json({ success: true, message: "Project deleted successfully" });
 });

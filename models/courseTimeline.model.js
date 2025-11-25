@@ -15,7 +15,7 @@ const ModuleSchema = new mongoose.Schema({
 const Module = mongoose.model("Module", ModuleSchema);
 
 const CourseSchema = new mongoose.Schema({
-  name: { type: String, enum: ["Cybersecurity", "Computer Science"], required: true },
+  name: { type: String, enum: ["Cybersecurity", "Computer Science","Business Management"], required: true },
   code: { type: String, required: true, unique: true },
   modules: [{ type: mongoose.Schema.Types.ObjectId, ref: "Module" }],
 });
