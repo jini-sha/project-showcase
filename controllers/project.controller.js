@@ -37,9 +37,8 @@ exports.submitProject = asyncHandler(async (req, res, next) => {
   const newProject = await Project.create(validated.data);
   res.status(StatusCodes.CREATED).json({ success: true, message: "Project uploaded successfully", project: newProject });
 });
-
 exports.getProjects = asyncHandler(async (req, res) => {
-  const { level, semesterNumber, courseId, featured, sort } = req.query;
+  const { level, semesterNumber, courseId, courseCode, featured, sort } = req.query;
 
   const projectMatch = {};
   if (courseId) projectMatch.courseId = courseId;
@@ -62,6 +61,22 @@ exports.getProjects = asyncHandler(async (req, res) => {
   if (level) moduleMatch["module.level"] = Number(level);
   if (semesterNumber) moduleMatch["module.semesterNumber"] = Number(semesterNumber);
   if (Object.keys(moduleMatch).length > 0) pipeline.push({ $match: moduleMatch });
+
+  pipeline.push(
+    {
+      $lookup: {
+        from: "courses",
+        localField: "courseId",
+        foreignField: "_id",
+        as: "course",
+      },
+    },
+    { $unwind: "$course" }
+  );
+
+  if (courseCode) {
+    pipeline.push({ $match: { "course.code": courseCode } });
+  }
 
   let sortOption = { createdAt: -1 };
   switch (sort) {
@@ -113,7 +128,7 @@ exports.updateProject = asyncHandler(async (req, res, next) => {
       return next(Object.assign(new Error("Module not found for this course"), { statusCode: StatusCodes.BAD_REQUEST }));
     project.moduleId = module._id;
   }
-  
+
   if (req.files && req.files.length) project.images = req.files.map(f => f.path);
 
   const projectData = {
