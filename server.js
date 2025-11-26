@@ -5,6 +5,10 @@ const errorMiddleware = require("./middleware/error.middleware");
 const PORT = process.env.PORT || 3000;
 const http = require("http");
 const server = http.createServer(app);
+const cors = require("cors")
+app.use(cors({
+  origin: "http://localhost:3000"
+}))
 
 app.use(errorMiddleware);
 app.use("/api", mainRouter);
