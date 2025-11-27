@@ -7,7 +7,7 @@ const http = require("http");
 const server = http.createServer(app);
 const cors = require("cors")
 app.use(cors({
-  origin: "http://localhost:3000"
+  origin: "http://localhost:8000"
 }))
 
 app.use(errorMiddleware);
