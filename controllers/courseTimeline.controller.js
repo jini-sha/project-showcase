@@ -5,6 +5,12 @@ const { StatusCodes } = require("http-status-codes");
 
 exports.createCourse = asyncHandler(async (req, res) => {
   const { name, code } = req.body;
+  const existingCourse = await Course.findOne({ code });
+  if (existingCourse) {
+    const error = new Error("A course with this code already exists");
+    error.statusCode = StatusCodes.CONFLICT; 
+    return next(error);
+  }
   const course = await Course.create({ name, code, modules: [] });
   res.status(StatusCodes.CREATED).json({ success: true, message: "Course created successfully", data: course });
 });
