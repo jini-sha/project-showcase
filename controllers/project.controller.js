@@ -35,7 +35,11 @@ exports.submitProject = asyncHandler(async (req, res, next) => {
   }
 
   const newProject = await Project.create(validated.data);
-  res.status(StatusCodes.CREATED).json({ success: true, message: "Project uploaded successfully", project: newProject });
+  res.status(StatusCodes.CREATED).json({
+    success: true,
+    message: "Project uploaded successfully",
+    project: newProject
+  });
 });
 exports.getProjects = asyncHandler(async (req, res) => {
   const { level, semesterNumber, courseId, courseCode, featured, sort } = req.query;

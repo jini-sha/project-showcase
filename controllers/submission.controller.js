@@ -7,7 +7,10 @@ const { Module } = require("../models/courseTimeline.model");
 exports.submit = asyncHandler(async (req, res) => {
   const validated = submissionValidationSchema.parse(req.body);
   const module = await Module.findById(validated.module);
-  if (!module) return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: "Module not found" });
+  if (!module) return res.status(StatusCodes.BAD_REQUEST).json({
+    success: false,
+    message: "Module not found"
+  });
 
   const newSubmission = await Submission.create({
     ...validated,

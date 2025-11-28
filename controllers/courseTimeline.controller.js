@@ -8,7 +8,7 @@ exports.createCourse = asyncHandler(async (req, res) => {
   const existingCourse = await Course.findOne({ code });
   if (existingCourse) {
     const error = new Error("A course with this code already exists");
-    error.statusCode = StatusCodes.CONFLICT; 
+    error.statusCode = StatusCodes.CONFLICT;
     return next(error);
   }
   const course = await Course.create({ name, code, modules: [] });
@@ -59,7 +59,10 @@ exports.deleteCourse = asyncHandler(async (req, res) => {
   const course = await Course.findByIdAndDelete(id);
   if (!course) return res.status(StatusCodes.NOT_FOUND).json({ message: "Course not found" });
   await Module.deleteMany({ course: course._id });
-  res.status(StatusCodes.OK).json({ success: true, message: "Course and its modules deleted successfully" });
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: "Course and its modules deleted successfully"
+  });
 });
 
 exports.createModule = asyncHandler(async (req, res) => {
@@ -77,13 +80,20 @@ exports.updateModule = asyncHandler(async (req, res) => {
   const updates = req.body;
   const module = await Module.findByIdAndUpdate(moduleId, updates, { new: true });
   if (!module) return res.status(StatusCodes.NOT_FOUND).json({ message: "Module not found" });
-  res.status(StatusCodes.OK).json({ success: true, message: "Module updated successfully", data: module });
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: "Module updated successfully",
+    data: module
+  });
 });
 
 exports.deleteModule = asyncHandler(async (req, res) => {
   const { moduleId } = req.params;
   const module = await Module.findByIdAndDelete(moduleId);
-  if (!module) return res.status(StatusCodes.NOT_FOUND).json({ message: "Module not found" });
+  if (!module) return res.status(StatusCodes.NOT_FOUND).json({
+    success: true,
+    message: "Module not found"
+  });
   await Course.findByIdAndUpdate(module.course, { $pull: { modules: module._id } });
   res.status(StatusCodes.OK).json({ success: true, message: "Module deleted successfully" });
 });
